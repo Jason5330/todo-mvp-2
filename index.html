@@ -32,12 +32,23 @@
     gap: 8px;
     margin-bottom: 16px;
   }
+  .input-row {
+    flex-wrap: wrap;
+  }
   .input-row input {
     flex: 1;
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+  }
+  .input-row input[type="text"] {
+    flex: 1 1 100%;
+  }
+  .input-row input[type="date"] {
+    flex: 1 1 auto;
+    color: #444;
+    font-family: inherit;
   }
   .input-row button {
     padding: 10px 16px;
@@ -70,6 +81,28 @@
   li.done span {
     text-decoration: line-through;
     color: #999;
+  }
+  li .text-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  li .date-tag {
+    font-size: 12px;
+    color: #888;
+  }
+  li .date-tag.today {
+    color: #d97706;
+  }
+  li .date-tag.overdue {
+    color: #d33;
+    font-weight: 600;
+  }
+  li.done .date-tag {
+    color: #bbb;
+    font-weight: normal;
   }
   li button.delete-btn {
     border: none;
@@ -107,6 +140,7 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="todo-date" type="date" title="到期日（選填）">
       <button id="add-btn">新增</button>
     </div>
     <ul id="todo-list"></ul>
@@ -141,7 +175,35 @@
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const dateEl = document.getElementById('todo-date');
   const addBtn = document.getElementById('add-btn');
+
+  // 以本地時區取得 YYYY-MM-DD，避免 toISOString() 的 UTC 偏移
+  function todayStr() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  function formatDate(dateStr) {
+    const [y, m, d] = dateStr.split('-');
+    return `${y}/${m}/${d}`;
+  }
+
+  function dateStatus(dateStr) {
+    const today = todayStr();
+    if (dateStr < today) return 'overdue';
+    if (dateStr === today) return 'today';
+    return 'upcoming';
+  }
+
+  function dateLabel(dateStr) {
+    const status = dateStatus(dateStr);
+    if (status === 'overdue') return `已逾期 · ${formatDate(dateStr)}`;
+    if (status === 'today') return `今天到期 · ${formatDate(dateStr)}`;
+    return `到期 ${formatDate(dateStr)}`;
+  }
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
@@ -159,8 +221,20 @@
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
+      const textWrap = document.createElement('div');
+      textWrap.className = 'text-wrap';
+
       const span = document.createElement('span');
       span.textContent = todo.text;
+      textWrap.appendChild(span);
+
+      if (todo.date) {
+        const dateTag = document.createElement('small');
+        dateTag.className = 'date-tag';
+        if (!todo.done) dateTag.classList.add(dateStatus(todo.date));
+        dateTag.textContent = dateLabel(todo.date);
+        textWrap.appendChild(dateTag);
+      }
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -168,7 +242,7 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(span);
+      li.appendChild(textWrap);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
@@ -180,8 +254,10 @@
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    const date = dateEl.value || null;
+    todos.push({ id: Date.now(), text, date, done: false });
     inputEl.value = '';
+    dateEl.value = '';
     saveTodos(todos);
     render();
   }
@@ -207,6 +283,9 @@
 
   addBtn.addEventListener('click', addTodo);
   inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
+  dateEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);

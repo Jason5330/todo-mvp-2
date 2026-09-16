@@ -24,8 +24,19 @@
   }
   h1 {
     font-size: 20px;
-    margin: 0 0 16px;
+    margin: 0 0 4px;
     color: #222;
+  }
+  .banner {
+    font-size: 28px;
+    font-weight: bold;
+    color: #e11d1d;
+    margin: 0 0 6px;
+  }
+  .clock {
+    font-size: 13px;
+    color: #888;
+    margin: 0 0 16px;
   }
   .input-row {
     display: flex;
@@ -62,12 +73,22 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
+  li .todo-main {
     flex: 1;
+    min-width: 0;
+  }
+  li span.text {
+    display: block;
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li span.time {
+    display: block;
+    font-size: 12px;
+    color: #aaa;
+    margin-top: 2px;
+  }
+  li.done span.text {
     text-decoration: line-through;
     color: #999;
   }
@@ -105,6 +126,8 @@
 <body>
   <div class="app">
     <h1>待辦事項</h1>
+    <div class="banner">AAOI快點噴發</div>
+    <div id="clock" class="clock"></div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>
@@ -159,8 +182,19 @@
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
+      const main = document.createElement('div');
+      main.className = 'todo-main';
+
       const span = document.createElement('span');
+      span.className = 'text';
       span.textContent = todo.text;
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'time';
+      timeSpan.textContent = formatTime(todo.createdAt);
+
+      main.appendChild(span);
+      main.appendChild(timeSpan);
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -168,7 +202,7 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(span);
+      li.appendChild(main);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
@@ -177,10 +211,17 @@
     countText.textContent = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
   }
 
+  function formatTime(timestamp) {
+    if (!timestamp) return '';
+    const d = new Date(timestamp);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    todos.push({ id: Date.now(), text, done: false, createdAt: Date.now() });
     inputEl.value = '';
     saveTodos(todos);
     render();
@@ -204,6 +245,18 @@
     saveTodos(todos);
     render();
   }
+
+  const clockEl = document.getElementById('clock');
+  const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function updateClock() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    clockEl.textContent = `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}（${WEEKDAYS[d.getDay()]}） ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
 
   addBtn.addEventListener('click', addTodo);
   inputEl.addEventListener('keydown', (e) => {

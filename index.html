@@ -27,6 +27,20 @@
     margin: 0 0 16px;
     color: #222;
   }
+  .weather {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: #eff6ff;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #1e3a8a;
+  }
+  .weather .icon { font-size: 22px; line-height: 1; }
+  .weather .temp { font-size: 18px; font-weight: 600; }
+  .weather .meta { color: #64748b; }
   .input-row {
     display: flex;
     gap: 8px;
@@ -105,6 +119,10 @@
 <body>
   <div class="app">
     <h1>待辦事項</h1>
+    <div id="weather" class="weather">
+      <span class="icon">⏳</span>
+      <span>今日台北天氣載入中…</span>
+    </div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>
@@ -138,6 +156,60 @@
   }
 
   let todos = loadTodos();
+
+  // 今日台北天氣（Open-Meteo，免金鑰）
+  const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=25.033&longitude=121.5654'
+    + '&current=temperature_2m,weather_code'
+    + '&daily=temperature_2m_max,temperature_2m_min'
+    + '&timezone=Asia%2FTaipei&forecast_days=1';
+
+  function describeWeather(code) {
+    if (code === 0) return ['☀️', '晴'];
+    if (code <= 2) return ['🌤️', '多雲時晴'];
+    if (code === 3) return ['☁️', '陰'];
+    if (code <= 48) return ['🌫️', '霧'];
+    if (code <= 57) return ['🌦️', '毛毛雨'];
+    if (code <= 67) return ['🌧️', '雨'];
+    if (code <= 77) return ['🌨️', '雪'];
+    if (code <= 82) return ['🌧️', '陣雨'];
+    if (code <= 86) return ['🌨️', '陣雪'];
+    return ['⛈️', '雷雨'];
+  }
+
+  async function loadWeather() {
+    const el = document.getElementById('weather');
+    try {
+      const res = await fetch(WEATHER_URL);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const [icon, text] = describeWeather(data.current.weather_code);
+      const now = Math.round(data.current.temperature_2m);
+      const hi = Math.round(data.daily.temperature_2m_max[0]);
+      const lo = Math.round(data.daily.temperature_2m_min[0]);
+      el.innerHTML = '';
+      const iconEl = document.createElement('span');
+      iconEl.className = 'icon';
+      iconEl.textContent = icon;
+      const tempEl = document.createElement('span');
+      tempEl.className = 'temp';
+      tempEl.textContent = `${now}°C`;
+      const metaEl = document.createElement('span');
+      metaEl.className = 'meta';
+      metaEl.textContent = `今日台北 ${text}，${lo}°C ～ ${hi}°C`;
+      el.append(iconEl, tempEl, metaEl);
+    } catch (e) {
+      el.innerHTML = '';
+      const iconEl = document.createElement('span');
+      iconEl.className = 'icon';
+      iconEl.textContent = '⚠️';
+      const msg = document.createElement('span');
+      msg.className = 'meta';
+      msg.textContent = '今日台北天氣暫時無法取得';
+      el.append(iconEl, msg);
+    }
+  }
+  loadWeather();
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');

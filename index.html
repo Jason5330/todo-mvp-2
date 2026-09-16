@@ -49,6 +49,29 @@
     cursor: pointer;
   }
   .input-row button:hover { background: #1d4ed8; }
+  .input-row input[type="date"] {
+    flex: 0 0 auto;
+    width: 150px;
+    color: #555;
+  }
+  @media (max-width: 420px) {
+    .input-row { flex-wrap: wrap; }
+    .input-row input[type="text"] { flex: 1 1 100%; }
+    .input-row input[type="date"] { flex: 1; }
+  }
+  .text-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .date-tag {
+    font-size: 12px;
+    color: #888;
+  }
+  .date-tag.overdue { color: #d33; }
+  li.done .date-tag { color: #bbb; text-decoration: none; }
   ul {
     list-style: none;
     margin: 0;
@@ -62,12 +85,11 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
-    flex: 1;
+  li span.todo-text {
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li.done span.todo-text {
     text-decoration: line-through;
     color: #999;
   }
@@ -107,6 +129,7 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="date-input" type="date" title="到期日（選填）">
       <button id="add-btn">新增</button>
     </div>
     <ul id="todo-list"></ul>
@@ -139,8 +162,20 @@
 
   let todos = loadTodos();
 
+  function todayStr() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function formatDate(iso) {
+    const [y, m, d] = iso.split('-');
+    return `${y}/${m}/${d}`;
+  }
+
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const dateEl = document.getElementById('date-input');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
@@ -159,8 +194,22 @@
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
+      const textWrap = document.createElement('div');
+      textWrap.className = 'text-wrap';
+
       const span = document.createElement('span');
+      span.className = 'todo-text';
       span.textContent = todo.text;
+      textWrap.appendChild(span);
+
+      if (todo.date) {
+        const dateTag = document.createElement('span');
+        dateTag.className = 'date-tag';
+        const isOverdue = !todo.done && todo.date < todayStr();
+        if (isOverdue) dateTag.classList.add('overdue');
+        dateTag.textContent = (isOverdue ? '已逾期 · ' : '到期 ') + formatDate(todo.date);
+        textWrap.appendChild(dateTag);
+      }
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -168,7 +217,7 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(span);
+      li.appendChild(textWrap);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
@@ -180,8 +229,11 @@
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    const date = dateEl.value || null;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    todos.push({ id, text, date, done: false });
     inputEl.value = '';
+    dateEl.value = '';
     saveTodos(todos);
     render();
   }
@@ -207,6 +259,9 @@
 
   addBtn.addEventListener('click', addTodo);
   inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
+  dateEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);

@@ -29,6 +29,7 @@
   }
   .input-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 16px;
   }
@@ -38,7 +39,10 @@
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+    font-family: inherit;
   }
+  .input-row input[type="text"] { flex: 1 1 100%; }
+  .input-row input.invalid { border-color: #d33; }
   .input-row button {
     padding: 10px 16px;
     border: none;
@@ -62,15 +66,29 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
+  li .content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  li .text {
     flex: 1;
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li .deadline {
+    font-size: 12px;
+    color: #888;
+    white-space: nowrap;
+  }
+  li.overdue .deadline { color: #d33; font-weight: bold; }
+  li.done .text {
     text-decoration: line-through;
     color: #999;
   }
+  li.done .deadline { color: #bbb; font-weight: normal; }
   li button.delete-btn {
     border: none;
     background: transparent;
@@ -107,6 +125,7 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="deadline-input" type="datetime-local" title="截止時間（必填）">
       <button id="add-btn">新增</button>
     </div>
     <ul id="todo-list"></ul>
@@ -141,10 +160,19 @@
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const deadlineEl = document.getElementById('deadline-input');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
+
+  function formatDeadline(value) {
+    return value.replace('T', ' ');
+  }
+
+  function isOverdue(todo) {
+    return !todo.done && todo.deadline && new Date(todo.deadline) < new Date();
+  }
 
   function render() {
     listEl.innerHTML = '';
@@ -153,14 +181,27 @@
     todos.forEach(todo => {
       const li = document.createElement('li');
       if (todo.done) li.classList.add('done');
+      if (isOverdue(todo)) li.classList.add('overdue');
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
-      const span = document.createElement('span');
-      span.textContent = todo.text;
+      const content = document.createElement('div');
+      content.className = 'content';
+
+      const text = document.createElement('span');
+      text.className = 'text';
+      text.textContent = todo.text;
+      content.appendChild(text);
+
+      if (todo.deadline) {
+        const deadline = document.createElement('span');
+        deadline.className = 'deadline';
+        deadline.textContent = (isOverdue(todo) ? '已逾期：' : '截止：') + formatDeadline(todo.deadline);
+        content.appendChild(deadline);
+      }
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -168,7 +209,7 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(span);
+      li.appendChild(content);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
@@ -179,9 +220,14 @@
 
   function addTodo() {
     const text = inputEl.value.trim();
-    if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    const deadline = deadlineEl.value;
+    inputEl.classList.toggle('invalid', !text);
+    deadlineEl.classList.toggle('invalid', !deadline);
+    if (!text) { inputEl.focus(); return; }
+    if (!deadline) { deadlineEl.focus(); return; }
+    todos.push({ id: Date.now(), text, deadline, done: false });
     inputEl.value = '';
+    deadlineEl.value = '';
     saveTodos(todos);
     render();
   }
@@ -206,9 +252,9 @@
   }
 
   addBtn.addEventListener('click', addTodo);
-  inputEl.addEventListener('keydown', (e) => {
+  [inputEl, deadlineEl].forEach(el => el.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
-  });
+  }));
   clearDoneBtn.addEventListener('click', clearDone);
 
   render();

@@ -29,15 +29,24 @@
   }
   .input-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 16px;
   }
   .input-row input {
-    flex: 1;
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+    font-family: inherit;
+  }
+  .input-row input[type="text"] {
+    flex: 1 1 100%;
+  }
+  .input-row input[type="datetime-local"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #444;
   }
   .input-row button {
     padding: 10px 16px;
@@ -62,14 +71,34 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
+  li .content {
     flex: 1;
+    min-width: 0;
+  }
+  li .text {
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li .due {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+  }
+  li.due-soon .due {
+    color: #d97706;
+    font-weight: bold;
+  }
+  li.overdue .due {
+    color: #d33;
+    font-weight: bold;
+  }
+  li.done .text {
     text-decoration: line-through;
     color: #999;
+  }
+  li.done .due {
+    color: #bbb;
+    font-weight: normal;
   }
   li button.delete-btn {
     border: none;
@@ -94,11 +123,71 @@
     cursor: pointer;
     font-size: 13px;
   }
+  .notify-row {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+  }
+  .notify-row button {
+    border: 1px solid #2563eb;
+    background: #fff;
+    color: #2563eb;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
   .empty {
     text-align: center;
     color: #aaa;
     font-size: 14px;
     padding: 24px 0;
+  }
+  #toast-container {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1000;
+    max-width: calc(100vw - 32px);
+  }
+  .toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-left: 4px solid #f59e0b;
+    color: #78350f;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    width: 320px;
+    max-width: 100%;
+    animation: toast-in 0.2s ease-out;
+  }
+  .toast.overdue {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+  }
+  .toast .msg { flex: 1; word-break: break-word; }
+  .toast .close {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
 </head>
@@ -107,6 +196,7 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="due-input" type="datetime-local" title="到期時間（選填）">
       <button id="add-btn">新增</button>
     </div>
     <ul id="todo-list"></ul>
@@ -115,15 +205,28 @@
       <span id="count-text">共 0 項</span>
       <button id="clear-done-btn">清除已完成</button>
     </div>
+    <div id="notify-row" class="notify-row" style="display:none;">
+      到期前 5 分鐘會在此頁面提醒。
+      <button id="notify-btn">開啟系統通知</button>
+    </div>
   </div>
+  <div id="toast-container"></div>
 
 <script>
   const STORAGE_KEY = 'todo-items';
+  const REMIND_BEFORE_MS = 5 * 60 * 1000; // 到期前 5 分鐘
+  const CHECK_INTERVAL_MS = 15 * 1000;    // 每 15 秒檢查一次
 
   function loadTodos() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      // 相容舊資料：補上到期與提醒欄位
+      return list.map(t => ({
+        dueAt: null,
+        reminded: false,
+        ...t
+      }));
     } catch (e) {
       return [];
     }
@@ -141,26 +244,79 @@
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const dueEl = document.getElementById('due-input');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
+  const notifyRow = document.getElementById('notify-row');
+  const notifyBtn = document.getElementById('notify-btn');
+  const toastContainer = document.getElementById('toast-container');
+
+  // ---------- 時間格式 ----------
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function formatDue(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const sameYear = d.getFullYear() === now.getFullYear();
+    const datePart = (sameYear ? '' : d.getFullYear() + '/') +
+      pad2(d.getMonth() + 1) + '/' + pad2(d.getDate());
+    return datePart + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function formatRemaining(ms) {
+    const totalMin = Math.ceil(ms / 60000);
+    if (totalMin < 1) return '不到 1 分鐘';
+    if (totalMin < 60) return totalMin + ' 分鐘';
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return m ? `${h} 小時 ${m} 分鐘` : `${h} 小時`;
+  }
+
+  function dueStatus(todo, now) {
+    if (todo.done || !todo.dueAt) return '';
+    if (now >= todo.dueAt) return 'overdue';
+    if (now >= todo.dueAt - REMIND_BEFORE_MS) return 'due-soon';
+    return '';
+  }
+
+  // ---------- 畫面 ----------
 
   function render() {
+    const now = Date.now();
     listEl.innerHTML = '';
     emptyHint.style.display = todos.length === 0 ? 'block' : 'none';
 
     todos.forEach(todo => {
       const li = document.createElement('li');
       if (todo.done) li.classList.add('done');
+      const status = dueStatus(todo, now);
+      if (status) li.classList.add(status);
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
-      const span = document.createElement('span');
-      span.textContent = todo.text;
+      const content = document.createElement('div');
+      content.className = 'content';
+
+      const textEl = document.createElement('div');
+      textEl.className = 'text';
+      textEl.textContent = todo.text;
+      content.appendChild(textEl);
+
+      if (todo.dueAt) {
+        const dueDiv = document.createElement('div');
+        dueDiv.className = 'due';
+        let label = '到期：' + formatDue(todo.dueAt);
+        if (status === 'overdue') label += '（已到期）';
+        else if (status === 'due-soon') label += `（剩 ${formatRemaining(todo.dueAt - now)}）`;
+        dueDiv.textContent = label;
+        content.appendChild(dueDiv);
+      }
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -168,22 +324,108 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(span);
+      li.appendChild(content);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
 
     const doneCount = todos.filter(t => t.done).length;
     countText.textContent = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
+    updateNotifyRow();
   }
+
+  // ---------- 提醒 ----------
+
+  function showToast(message, isOverdue) {
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (isOverdue ? ' overdue' : '');
+
+    const msg = document.createElement('div');
+    msg.className = 'msg';
+    msg.textContent = message;
+
+    const close = document.createElement('button');
+    close.className = 'close';
+    close.setAttribute('aria-label', '關閉');
+    close.textContent = '×';
+    close.addEventListener('click', () => toast.remove());
+
+    toast.appendChild(msg);
+    toast.appendChild(close);
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => toast.remove(), 15000);
+  }
+
+  function notificationsSupported() {
+    return typeof Notification !== 'undefined';
+  }
+
+  function showSystemNotification(title, body) {
+    if (!notificationsSupported() || Notification.permission !== 'granted') return;
+    try {
+      const n = new Notification(title, { body });
+      n.addEventListener('click', () => { window.focus(); n.close(); });
+    } catch (e) {
+      // 某些瀏覽器（如行動版）不允許直接建立 Notification，忽略即可
+    }
+  }
+
+  function fireReminder(todo, now) {
+    const overdue = now >= todo.dueAt;
+    const message = overdue
+      ? `「${todo.text}」已到期（${formatDue(todo.dueAt)}）`
+      : `「${todo.text}」將在 ${formatRemaining(todo.dueAt - now)}後到期（${formatDue(todo.dueAt)}）`;
+    showToast(message, overdue);
+    showSystemNotification(overdue ? '待辦事項已到期' : '待辦事項即將到期', message);
+  }
+
+  function checkReminders() {
+    const now = Date.now();
+    let changed = false;
+    todos.forEach(todo => {
+      if (todo.done || !todo.dueAt || todo.reminded) return;
+      if (now >= todo.dueAt - REMIND_BEFORE_MS) {
+        fireReminder(todo, now);
+        todo.reminded = true;
+        changed = true;
+      }
+    });
+    if (changed) saveTodos(todos);
+    render();
+  }
+
+  function updateNotifyRow() {
+    const hasPendingDue = todos.some(t => !t.done && t.dueAt);
+    const canAsk = notificationsSupported() && Notification.permission === 'default';
+    notifyRow.style.display = hasPendingDue && canAsk ? 'block' : 'none';
+  }
+
+  function requestNotificationPermission() {
+    if (!notificationsSupported() || Notification.permission !== 'default') return;
+    Notification.requestPermission().then(() => updateNotifyRow()).catch(() => {});
+  }
+
+  // ---------- 操作 ----------
 
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+
+    let dueAt = null;
+    if (dueEl.value) {
+      const ts = new Date(dueEl.value).getTime();
+      if (!Number.isNaN(ts)) dueAt = ts;
+    }
+
+    todos.push({ id: Date.now(), text, done: false, dueAt, reminded: false });
     inputEl.value = '';
+    dueEl.value = '';
     saveTodos(todos);
     render();
+
+    if (dueAt) requestNotificationPermission();
+    checkReminders(); // 若設定的到期時間已在 5 分鐘內，立刻提醒
   }
 
   function toggleTodo(id) {
@@ -209,9 +451,18 @@
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
   });
+  dueEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
   clearDoneBtn.addEventListener('click', clearDone);
+  notifyBtn.addEventListener('click', requestNotificationPermission);
 
   render();
+  checkReminders();
+  setInterval(checkReminders, CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkReminders();
+  });
 </script>
 </body>
 </html>

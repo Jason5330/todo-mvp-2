@@ -27,6 +27,107 @@
     margin: 0 0 16px;
     color: #222;
   }
+
+  /* ---------- 天氣卡片 ---------- */
+  .weather {
+    background: linear-gradient(135deg, #3b82f6, #60a5fa);
+    color: #fff;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .weather-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .weather-icon {
+    font-size: 40px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .weather-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .weather-temp {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .weather-desc {
+    font-size: 14px;
+    opacity: 0.95;
+    margin-top: 2px;
+  }
+  .weather-place {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .weather-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .weather-actions button {
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .weather-actions button:hover { background: rgba(255,255,255,0.32); }
+  .weather-actions button:disabled { opacity: 0.6; cursor: default; }
+  .weather-meta {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 10px;
+  }
+  .weather-meta:empty { display: none; }
+  .weather-status {
+    font-size: 12px;
+    opacity: 0.85;
+    margin-top: 8px;
+  }
+  .weather-status:empty { display: none; }
+  .weather-search {
+    display: none;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .weather-search.open { display: flex; }
+  .weather-search input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .weather-search button {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #fff;
+    color: #2563eb;
+    white-space: nowrap;
+  }
+  .weather-search button:hover { background: #eff6ff; }
+  .weather-search button:disabled { opacity: 0.6; cursor: default; }
+
+  /* ---------- 待辦清單 ---------- */
   .input-row {
     display: flex;
     gap: 8px;
@@ -105,6 +206,29 @@
 <body>
   <div class="app">
     <h1>待辦事項</h1>
+
+    <section class="weather" id="weather" aria-live="polite">
+      <div class="weather-main">
+        <div class="weather-icon" id="weather-icon">⛅</div>
+        <div class="weather-info">
+          <div class="weather-temp" id="weather-temp">--°</div>
+          <div class="weather-desc" id="weather-desc">載入天氣中…</div>
+          <div class="weather-place" id="weather-place"></div>
+        </div>
+        <div class="weather-actions">
+          <button id="weather-refresh-btn" title="重新整理天氣">重新整理</button>
+          <button id="weather-change-btn" title="更換地點">更換地點</button>
+        </div>
+      </div>
+      <div class="weather-meta" id="weather-meta"></div>
+      <div class="weather-search" id="weather-search">
+        <input id="weather-city-input" type="text" placeholder="輸入城市名稱，例如：台北、Tokyo">
+        <button id="weather-city-btn">搜尋</button>
+        <button id="weather-geo-btn">目前位置</button>
+      </div>
+      <div class="weather-status" id="weather-status"></div>
+    </section>
+
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>
@@ -118,6 +242,9 @@
   </div>
 
 <script>
+  // =====================================================
+  // 待辦事項
+  // =====================================================
   const STORAGE_KEY = 'todo-items';
 
   function loadTodos() {
@@ -212,6 +339,274 @@
   clearDoneBtn.addEventListener('click', clearDone);
 
   render();
+
+  // =====================================================
+  // 天氣（使用免費、免金鑰的 Open-Meteo API）
+  // =====================================================
+  const WEATHER_LOCATION_KEY = 'weather-location';
+  const WEATHER_CACHE_KEY = 'weather-cache';
+  const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 分鐘內不重複抓取
+  const DEFAULT_LOCATION = { name: '台北', lat: 25.0330, lon: 121.5654, mode: 'city' };
+
+  // WMO 天氣代碼 → 中文描述與圖示
+  const WEATHER_CODES = {
+    0:  ['晴朗', '☀️'],
+    1:  ['大致晴朗', '🌤️'],
+    2:  ['局部多雲', '⛅'],
+    3:  ['陰天', '☁️'],
+    45: ['有霧', '🌫️'],
+    48: ['霧凇', '🌫️'],
+    51: ['小毛毛雨', '🌦️'],
+    53: ['毛毛雨', '🌦️'],
+    55: ['大毛毛雨', '🌧️'],
+    56: ['凍毛毛雨', '🌧️'],
+    57: ['強凍毛毛雨', '🌧️'],
+    61: ['小雨', '🌧️'],
+    63: ['中雨', '🌧️'],
+    65: ['大雨', '🌧️'],
+    66: ['凍雨', '🌧️'],
+    67: ['強凍雨', '🌧️'],
+    71: ['小雪', '🌨️'],
+    73: ['中雪', '🌨️'],
+    75: ['大雪', '❄️'],
+    77: ['雪粒', '🌨️'],
+    80: ['小陣雨', '🌦️'],
+    81: ['陣雨', '🌧️'],
+    82: ['強陣雨', '⛈️'],
+    85: ['小陣雪', '🌨️'],
+    86: ['大陣雪', '❄️'],
+    95: ['雷雨', '⛈️'],
+    96: ['雷雨伴小冰雹', '⛈️'],
+    99: ['雷雨伴大冰雹', '⛈️'],
+  };
+
+  const weatherIconEl = document.getElementById('weather-icon');
+  const weatherTempEl = document.getElementById('weather-temp');
+  const weatherDescEl = document.getElementById('weather-desc');
+  const weatherPlaceEl = document.getElementById('weather-place');
+  const weatherMetaEl = document.getElementById('weather-meta');
+  const weatherStatusEl = document.getElementById('weather-status');
+  const weatherRefreshBtn = document.getElementById('weather-refresh-btn');
+  const weatherChangeBtn = document.getElementById('weather-change-btn');
+  const weatherSearchEl = document.getElementById('weather-search');
+  const weatherCityInput = document.getElementById('weather-city-input');
+  const weatherCityBtn = document.getElementById('weather-city-btn');
+  const weatherGeoBtn = document.getElementById('weather-geo-btn');
+
+  function readJSON(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeJSON(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      // 無法使用 localStorage 時略過
+    }
+  }
+
+  function setWeatherStatus(text) {
+    weatherStatusEl.textContent = text || '';
+  }
+
+  function setWeatherLoading(loading) {
+    weatherRefreshBtn.disabled = loading;
+    weatherCityBtn.disabled = loading;
+    weatherGeoBtn.disabled = loading;
+  }
+
+  function formatTime(ts) {
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  function renderWeather(data, location, fetchedAt, stale) {
+    const [desc, icon] = WEATHER_CODES[data.code] || ['未知', '🌡️'];
+    weatherIconEl.textContent = icon;
+    weatherTempEl.textContent = `${Math.round(data.temp)}°`;
+    weatherDescEl.textContent = desc;
+    weatherPlaceEl.textContent = location.name;
+    weatherMetaEl.innerHTML = '';
+    [
+      `最高 ${Math.round(data.max)}°`,
+      `最低 ${Math.round(data.min)}°`,
+      `濕度 ${Math.round(data.humidity)}%`,
+    ].forEach(text => {
+      const span = document.createElement('span');
+      span.textContent = text;
+      weatherMetaEl.appendChild(span);
+    });
+    setWeatherStatus(
+      (stale ? '目前離線，顯示上次資料。' : '') + `更新於 ${formatTime(fetchedAt)}`
+    );
+  }
+
+  function renderWeatherError(message) {
+    weatherIconEl.textContent = '❔';
+    weatherTempEl.textContent = '--°';
+    weatherDescEl.textContent = '無法取得天氣';
+    weatherPlaceEl.textContent = '';
+    weatherMetaEl.innerHTML = '';
+    setWeatherStatus(message);
+  }
+
+  async function fetchWeather(location) {
+    const url = 'https://api.open-meteo.com/v1/forecast'
+      + `?latitude=${encodeURIComponent(location.lat)}`
+      + `&longitude=${encodeURIComponent(location.lon)}`
+      + '&current=temperature_2m,relative_humidity_2m,weather_code'
+      + '&daily=temperature_2m_max,temperature_2m_min'
+      + '&timezone=auto&forecast_days=1';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return {
+      temp: json.current.temperature_2m,
+      humidity: json.current.relative_humidity_2m,
+      code: json.current.weather_code,
+      max: json.daily.temperature_2m_max[0],
+      min: json.daily.temperature_2m_min[0],
+    };
+  }
+
+  async function geocodeCity(name) {
+    const url = 'https://geocoding-api.open-meteo.com/v1/search'
+      + `?name=${encodeURIComponent(name)}&count=1&language=zh&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const hit = json.results && json.results[0];
+    if (!hit) return null;
+    const label = [hit.name, hit.admin1, hit.country]
+      .filter((v, i, arr) => v && arr.indexOf(v) === i)
+      .join('，');
+    return { name: label, lat: hit.latitude, lon: hit.longitude, mode: 'city' };
+  }
+
+  function getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('此瀏覽器不支援定位'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({
+          name: '目前位置',
+          lat: +pos.coords.latitude.toFixed(4),
+          lon: +pos.coords.longitude.toFixed(4),
+          mode: 'geo',
+        }),
+        err => reject(err),
+        { timeout: 8000, maximumAge: 10 * 60 * 1000 }
+      );
+    });
+  }
+
+  function getSavedLocation() {
+    const saved = readJSON(WEATHER_LOCATION_KEY);
+    if (saved && typeof saved.lat === 'number' && typeof saved.lon === 'number') return saved;
+    return null;
+  }
+
+  async function updateWeather(location, { force = false } = {}) {
+    const cache = readJSON(WEATHER_CACHE_KEY);
+    const sameLocation = !!(cache && cache.location
+      && cache.location.lat === location.lat && cache.location.lon === location.lon);
+    const cacheFresh = sameLocation && Date.now() - cache.fetchedAt < WEATHER_CACHE_TTL;
+
+    if (!force && cacheFresh) {
+      renderWeather(cache.data, location, cache.fetchedAt, false);
+      return;
+    }
+
+    setWeatherLoading(true);
+    setWeatherStatus('載入中…');
+    try {
+      const data = await fetchWeather(location);
+      const fetchedAt = Date.now();
+      writeJSON(WEATHER_CACHE_KEY, { data, location, fetchedAt });
+      writeJSON(WEATHER_LOCATION_KEY, location);
+      renderWeather(data, location, fetchedAt, false);
+    } catch (e) {
+      if (sameLocation) {
+        renderWeather(cache.data, location, cache.fetchedAt, true);
+      } else {
+        renderWeatherError('無法連線到天氣服務，請確認網路後重新整理。');
+      }
+    } finally {
+      setWeatherLoading(false);
+    }
+  }
+
+  async function useGeolocation() {
+    setWeatherLoading(true);
+    setWeatherStatus('取得目前位置中…');
+    try {
+      const location = await getCurrentPosition();
+      await updateWeather(location, { force: true });
+    } catch (e) {
+      setWeatherLoading(false);
+      const saved = getSavedLocation();
+      if (saved) {
+        setWeatherStatus('無法取得目前位置，維持原地點。');
+        await updateWeather(saved);
+      } else {
+        setWeatherStatus('無法取得目前位置，改用預設地點。');
+        await updateWeather(DEFAULT_LOCATION);
+      }
+    }
+  }
+
+  async function searchCity() {
+    const name = weatherCityInput.value.trim();
+    if (!name) return;
+    setWeatherLoading(true);
+    setWeatherStatus(`搜尋「${name}」中…`);
+    try {
+      const location = await geocodeCity(name);
+      if (!location) {
+        setWeatherLoading(false);
+        setWeatherStatus(`找不到「${name}」，請換個名稱試試。`);
+        return;
+      }
+      weatherCityInput.value = '';
+      weatherSearchEl.classList.remove('open');
+      await updateWeather(location, { force: true });
+    } catch (e) {
+      setWeatherLoading(false);
+      setWeatherStatus('搜尋失敗，請確認網路後再試。');
+    }
+  }
+
+  weatherRefreshBtn.addEventListener('click', () => {
+    updateWeather(getSavedLocation() || DEFAULT_LOCATION, { force: true });
+  });
+  weatherChangeBtn.addEventListener('click', () => {
+    const open = weatherSearchEl.classList.toggle('open');
+    if (open) weatherCityInput.focus();
+  });
+  weatherCityBtn.addEventListener('click', searchCity);
+  weatherCityInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchCity();
+  });
+  weatherGeoBtn.addEventListener('click', useGeolocation);
+
+  // 啟動：有記住的地點就直接用；否則嘗試定位，失敗則用預設地點（台北）
+  (function initWeather() {
+    const saved = getSavedLocation();
+    if (saved) {
+      updateWeather(saved);
+    } else {
+      useGeolocation();
+    }
+  })();
 </script>
 </body>
 </html>

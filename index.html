@@ -15,6 +15,8 @@
     justify-content: center;
   }
   .app {
+    position: relative;
+    overflow: hidden;
     width: 100%;
     max-width: 480px;
     background: #fff;
@@ -22,6 +24,19 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     padding: 24px;
   }
+  /* 看板底圖：皮卡丘插圖淡化後鋪在右下角，不影響閱讀與點擊 */
+  .app::before {
+    content: "";
+    position: absolute;
+    right: -16px;
+    bottom: -12px;
+    width: 220px;
+    height: 240px;
+    background: url("pikachu.svg") no-repeat center / contain;
+    opacity: 0.16;
+    pointer-events: none;
+  }
+  .app > * { position: relative; }
   h1 {
     font-size: 20px;
     margin: 0 0 16px;

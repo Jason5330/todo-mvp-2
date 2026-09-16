@@ -16,7 +16,7 @@
   }
   .app {
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -31,14 +31,17 @@
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
   }
   .input-row input {
-    flex: 1;
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+    min-width: 0;
   }
+  .input-row #todo-input { flex: 1 1 200px; }
+  .input-row #owner-input { flex: 0 1 120px; }
   .input-row button {
     padding: 10px 16px;
     border: none;
@@ -49,6 +52,21 @@
     cursor: pointer;
   }
   .input-row button:hover { background: #1d4ed8; }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #666;
+  }
+  .filter-row select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+  }
   ul {
     list-style: none;
     margin: 0;
@@ -62,15 +80,31 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
+  li span.text {
     flex: 1;
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li.done span.text {
     text-decoration: line-through;
     color: #999;
   }
+  li .owner-badge {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e0ecff;
+    color: #1d4ed8;
+    white-space: nowrap;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+  }
+  li .owner-badge.unassigned {
+    background: #f0f0f0;
+    color: #888;
+  }
+  li .owner-badge:hover { filter: brightness(0.95); }
   li button.delete-btn {
     border: none;
     background: transparent;
@@ -107,7 +141,15 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="owner-input" type="text" placeholder="負責人" title="選填" list="owner-suggestions">
+      <datalist id="owner-suggestions"></datalist>
       <button id="add-btn">新增</button>
+    </div>
+    <div class="filter-row">
+      <label for="owner-filter">負責人篩選：</label>
+      <select id="owner-filter">
+        <option value="">全部</option>
+      </select>
     </div>
     <ul id="todo-list"></ul>
     <div id="empty-hint" class="empty" style="display:none;">目前沒有待辦事項</div>
@@ -119,11 +161,14 @@
 
 <script>
   const STORAGE_KEY = 'todo-items';
+  const UNASSIGNED = '未指定';
 
   function loadTodos() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      // 舊資料沒有 owner 欄位，補上空字串以維持相容
+      return list.map(t => ({ ...t, owner: typeof t.owner === 'string' ? t.owner : '' }));
     } catch (e) {
       return [];
     }
@@ -138,19 +183,74 @@
   }
 
   let todos = loadTodos();
+  let ownerFilter = ''; // '' = 全部，UNASSIGNED = 只看未指定，其餘為 owner 名稱
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const ownerInputEl = document.getElementById('owner-input');
+  const ownerSuggestEl = document.getElementById('owner-suggestions');
+  const ownerFilterEl = document.getElementById('owner-filter');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
 
-  function render() {
-    listEl.innerHTML = '';
-    emptyHint.style.display = todos.length === 0 ? 'block' : 'none';
+  function getOwners() {
+    const set = new Set(todos.map(t => t.owner).filter(o => o));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }
 
-    todos.forEach(todo => {
+  function renderOwnerControls() {
+    const owners = getOwners();
+
+    ownerSuggestEl.innerHTML = '';
+    owners.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o;
+      ownerSuggestEl.appendChild(opt);
+    });
+
+    ownerFilterEl.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = '全部';
+    ownerFilterEl.appendChild(allOpt);
+
+    owners.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o;
+      opt.textContent = o;
+      ownerFilterEl.appendChild(opt);
+    });
+
+    if (todos.some(t => !t.owner)) {
+      const opt = document.createElement('option');
+      opt.value = UNASSIGNED;
+      opt.textContent = UNASSIGNED;
+      ownerFilterEl.appendChild(opt);
+    }
+
+    // 若目前篩選的 owner 已不存在，退回「全部」
+    const valid = Array.from(ownerFilterEl.options).some(o => o.value === ownerFilter);
+    if (!valid) ownerFilter = '';
+    ownerFilterEl.value = ownerFilter;
+  }
+
+  function matchesFilter(todo) {
+    if (ownerFilter === '') return true;
+    if (ownerFilter === UNASSIGNED) return !todo.owner;
+    return todo.owner === ownerFilter;
+  }
+
+  function render() {
+    renderOwnerControls();
+
+    listEl.innerHTML = '';
+    const visible = todos.filter(matchesFilter);
+    emptyHint.style.display = visible.length === 0 ? 'block' : 'none';
+    emptyHint.textContent = todos.length === 0 ? '目前沒有待辦事項' : '此負責人沒有待辦事項';
+
+    visible.forEach(todo => {
       const li = document.createElement('li');
       if (todo.done) li.classList.add('done');
 
@@ -160,7 +260,15 @@
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
       const span = document.createElement('span');
+      span.className = 'text';
       span.textContent = todo.text;
+
+      const ownerBadge = document.createElement('button');
+      ownerBadge.type = 'button';
+      ownerBadge.className = 'owner-badge' + (todo.owner ? '' : ' unassigned');
+      ownerBadge.textContent = todo.owner || UNASSIGNED;
+      ownerBadge.title = '點擊修改負責人';
+      ownerBadge.addEventListener('click', () => editOwner(todo.id));
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
@@ -169,19 +277,38 @@
 
       li.appendChild(checkbox);
       li.appendChild(span);
+      li.appendChild(ownerBadge);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
 
     const doneCount = todos.filter(t => t.done).length;
-    countText.textContent = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
+    let text = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
+    if (ownerFilter !== '') {
+      const visibleDone = visible.filter(t => t.done).length;
+      text += `（篩選中：${visible.length} 項，已完成 ${visibleDone} 項）`;
+    }
+    countText.textContent = text;
   }
 
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    const owner = ownerInputEl.value.trim();
+    todos.push({ id: Date.now(), text, owner, done: false });
     inputEl.value = '';
+    // 保留負責人欄位內容，方便連續為同一人新增多項
+    saveTodos(todos);
+    render();
+    inputEl.focus();
+  }
+
+  function editOwner(id) {
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+    const result = window.prompt('請輸入負責人（留空表示未指定）：', todo.owner || '');
+    if (result === null) return; // 使用者按取消
+    todo.owner = result.trim();
     saveTodos(todos);
     render();
   }
@@ -208,6 +335,13 @@
   addBtn.addEventListener('click', addTodo);
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
+  });
+  ownerInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
+  ownerFilterEl.addEventListener('change', () => {
+    ownerFilter = ownerFilterEl.value;
+    render();
   });
   clearDoneBtn.addEventListener('click', clearDone);
 

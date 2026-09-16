@@ -16,7 +16,7 @@
   }
   .app {
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -31,14 +31,17 @@
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
   }
   .input-row input {
-    flex: 1;
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+    min-width: 0;
   }
+  .input-row #todo-input { flex: 1 1 200px; }
+  .input-row #owner-input { flex: 1 1 120px; max-width: 180px; }
   .input-row button {
     padding: 10px 16px;
     border: none;
@@ -49,6 +52,21 @@
     cursor: pointer;
   }
   .input-row button:hover { background: #1d4ed8; }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #666;
+  }
+  .filter-row select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+  }
   ul {
     list-style: none;
     margin: 0;
@@ -62,15 +80,34 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span {
+  li span.text {
     flex: 1;
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span {
+  li.done span.text {
     text-decoration: line-through;
     color: #999;
   }
+  li .owner-badge {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e0ecff;
+    color: #1d4ed8;
+    white-space: nowrap;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+  }
+  li .owner-badge.unassigned {
+    background: #f0f0f0;
+    color: #666;
+  }
+  li .owner-badge:hover { filter: brightness(0.95); }
   li button.delete-btn {
     border: none;
     background: transparent;
@@ -78,11 +115,14 @@
     font-size: 14px;
     cursor: pointer;
     padding: 4px 8px;
+    white-space: nowrap;
   }
   .footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-top: 16px;
     font-size: 13px;
     color: #888;
@@ -93,6 +133,8 @@
     color: #2563eb;
     cursor: pointer;
     font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .empty {
     text-align: center;
@@ -107,7 +149,15 @@
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
+      <input id="owner-input" type="text" placeholder="負責人（選填）" aria-label="負責人（選填）" maxlength="20" list="owner-suggestions">
+      <datalist id="owner-suggestions"></datalist>
       <button id="add-btn">新增</button>
+    </div>
+    <div class="filter-row">
+      <label for="owner-filter">負責人篩選：</label>
+      <select id="owner-filter">
+        <option value="">全部</option>
+      </select>
     </div>
     <ul id="todo-list"></ul>
     <div id="empty-hint" class="empty" style="display:none;">目前沒有待辦事項</div>
@@ -119,11 +169,28 @@
 
 <script>
   const STORAGE_KEY = 'todo-items';
+  const UNASSIGNED = '未指定'; // 顯示用文字
+
+  // 篩選下拉選單的內部值：加上前綴，避免與使用者輸入的負責人名稱衝突
+  const FILTER_ALL = '';
+  const FILTER_UNASSIGNED = 'u:';
+  const OWNER_PREFIX = 'o:';
+
+  // 負責人名稱正規化：去除前後空白；若剛好等於「未指定」則視為未指定
+  function normalizeOwner(value) {
+    const s = typeof value === 'string' ? value.trim() : '';
+    return s === UNASSIGNED ? '' : s;
+  }
 
   function loadTodos() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list)) return [];
+      // 舊資料沒有 owner 欄位，補上空字串以維持相容；略過損毀的非物件項目
+      return list
+        .filter(t => t && typeof t === 'object')
+        .map(t => ({ ...t, owner: normalizeOwner(t.owner) }));
     } catch (e) {
       return [];
     }
@@ -138,52 +205,147 @@
   }
 
   let todos = loadTodos();
+  let ownerFilter = FILTER_ALL;
 
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
+  const ownerInputEl = document.getElementById('owner-input');
+  const ownerSuggestEl = document.getElementById('owner-suggestions');
+  const ownerFilterEl = document.getElementById('owner-filter');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
 
-  function render() {
-    listEl.innerHTML = '';
-    emptyHint.style.display = todos.length === 0 ? 'block' : 'none';
+  function getOwners() {
+    const set = new Set(todos.map(t => t.owner).filter(o => o));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  }
 
-    todos.forEach(todo => {
+  // 目前篩選中的負責人名稱（未篩選或篩選「未指定」時為 null）
+  function filteredOwnerName() {
+    return ownerFilter.startsWith(OWNER_PREFIX) ? ownerFilter.slice(OWNER_PREFIX.length) : null;
+  }
+
+  function addOption(selectEl, value, text) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    selectEl.appendChild(opt);
+  }
+
+  function renderOwnerControls() {
+    const owners = getOwners();
+
+    // 自動完成建議：只列目前清單中實際存在的負責人
+    ownerSuggestEl.innerHTML = '';
+    owners.forEach(o => addOption(ownerSuggestEl, o, o));
+
+    // 篩選選項：目前清單中的負責人 + 有未指定項目時的「未指定」。
+    // 若篩選中的負責人已沒有任何項目，仍保留該選項，讓畫面停在空清單而不是突然跳回「全部」。
+    const selectedOwner = filteredOwnerName();
+    const filterOwners = owners.slice();
+    if (selectedOwner !== null && !filterOwners.includes(selectedOwner)) {
+      filterOwners.push(selectedOwner);
+      filterOwners.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+    }
+    const showUnassigned = todos.some(t => !t.owner) || ownerFilter === FILTER_UNASSIGNED;
+
+    ownerFilterEl.innerHTML = '';
+    addOption(ownerFilterEl, FILTER_ALL, '全部');
+    filterOwners.forEach(o => addOption(ownerFilterEl, OWNER_PREFIX + o, o));
+    if (showUnassigned) addOption(ownerFilterEl, FILTER_UNASSIGNED, UNASSIGNED);
+
+    ownerFilterEl.value = ownerFilter;
+  }
+
+  function matchesFilter(todo) {
+    if (ownerFilter === FILTER_ALL) return true;
+    if (ownerFilter === FILTER_UNASSIGNED) return !todo.owner;
+    return todo.owner === filteredOwnerName();
+  }
+
+  function render() {
+    renderOwnerControls();
+
+    listEl.innerHTML = '';
+    const visible = todos.filter(matchesFilter);
+    emptyHint.style.display = visible.length === 0 ? 'block' : 'none';
+    emptyHint.textContent = todos.length === 0 ? '目前沒有待辦事項' : '此篩選條件下沒有待辦事項';
+
+    visible.forEach(todo => {
       const li = document.createElement('li');
+      li.dataset.id = todo.id;
       if (todo.done) li.classList.add('done');
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = todo.done;
+      checkbox.setAttribute('aria-label', (todo.done ? '取消完成：' : '標記完成：') + todo.text);
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
       const span = document.createElement('span');
+      span.className = 'text';
       span.textContent = todo.text;
+
+      const ownerName = todo.owner || UNASSIGNED;
+      const ownerBadge = document.createElement('button');
+      ownerBadge.type = 'button';
+      ownerBadge.className = 'owner-badge' + (todo.owner ? '' : ' unassigned');
+      ownerBadge.textContent = ownerName;
+      ownerBadge.title = '修改負責人：' + ownerName;
+      ownerBadge.setAttribute('aria-label', '負責人：' + ownerName + '，修改');
+      ownerBadge.addEventListener('click', () => editOwner(todo.id));
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '刪除';
       delBtn.className = 'delete-btn';
+      delBtn.setAttribute('aria-label', '刪除：' + todo.text);
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
       li.appendChild(span);
+      li.appendChild(ownerBadge);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
 
     const doneCount = todos.filter(t => t.done).length;
-    countText.textContent = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
+    if (ownerFilter === FILTER_ALL) {
+      countText.textContent = `共 ${todos.length} 項，已完成 ${doneCount} 項`;
+    } else {
+      const label = ownerFilter === FILTER_UNASSIGNED ? UNASSIGNED : filteredOwnerName();
+      const visibleDone = visible.filter(t => t.done).length;
+      countText.textContent = `篩選「${label}」：${visible.length} 項，已完成 ${visibleDone} 項（全部共 ${todos.length} 項）`;
+    }
+  }
+
+  function focusOwnerBadge(id) {
+    const badge = listEl.querySelector(`li[data-id="${id}"] .owner-badge`);
+    if (badge) badge.focus();
   }
 
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    todos.push({ id: Date.now(), text, done: false });
+    const owner = normalizeOwner(ownerInputEl.value);
+    todos.push({ id: Date.now(), text, owner, done: false });
     inputEl.value = '';
+    // 保留負責人欄位內容，方便連續為同一人新增多項（僅在本次開啟期間保留）
     saveTodos(todos);
     render();
+    inputEl.focus();
+  }
+
+  function editOwner(id) {
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+    const result = window.prompt('請輸入負責人（留空表示未指定）：', todo.owner || '');
+    if (result === null) return; // 使用者按取消，維持原狀
+    todo.owner = normalizeOwner(result);
+    saveTodos(todos);
+    render();
+    focusOwnerBadge(id); // 清單重繪後把鍵盤焦點放回同一個標籤
   }
 
   function toggleTodo(id) {
@@ -199,8 +361,9 @@
     render();
   }
 
+  // 清除已完成：篩選中時只清除目前顯示範圍內的已完成項目，避免誤刪看不到的項目
   function clearDone() {
-    todos = todos.filter(t => !t.done);
+    todos = todos.filter(t => !(t.done && matchesFilter(t)));
     saveTodos(todos);
     render();
   }
@@ -208,6 +371,13 @@
   addBtn.addEventListener('click', addTodo);
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
+  });
+  ownerInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addTodo();
+  });
+  ownerFilterEl.addEventListener('change', () => {
+    ownerFilter = ownerFilterEl.value;
+    render();
   });
   clearDoneBtn.addEventListener('click', clearDone);
 

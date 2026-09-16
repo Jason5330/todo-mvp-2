@@ -8,25 +8,126 @@
   * { box-sizing: border-box; }
   body {
     font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
-    background: #f5f5f7;
+    /* 迪士尼風夜空：深藍夜色 → 紫色魔幻 → 粉紫晨曦 */
+    background: linear-gradient(180deg, #0a1544 0%, #26206e 40%, #6a3fa5 72%, #d67ad8 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
     margin: 0;
     padding: 40px 16px;
     display: flex;
     justify-content: center;
+    align-items: flex-start;
+    position: relative;
+    overflow-x: hidden;
   }
+
+  /* ===== 背景裝飾層（純 CSS / 內嵌 SVG，不依賴外部檔案） ===== */
+  .sky, .castle, .shooting-star {
+    position: fixed;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .sky { inset: 0; overflow: hidden; }
+  .sky::before, .sky::after {
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background-image:
+      radial-gradient(1.5px 1.5px at 20px 30px, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 90px 140px, #fff, transparent),
+      radial-gradient(2px 2px at 160px 60px, #fff, transparent),
+      radial-gradient(1px 1px at 220px 190px, #fff, transparent),
+      radial-gradient(1.5px 1.5px at 300px 100px, #fff, transparent),
+      radial-gradient(1px 1px at 350px 220px, #fff, transparent),
+      radial-gradient(2px 2px at 60px 240px, #fff, transparent),
+      radial-gradient(1px 1px at 260px 20px, #fff, transparent);
+    background-size: 380px 280px;
+    opacity: 0.85;
+  }
+  .sky::after {
+    background-position: 190px 140px;
+    background-size: 460px 340px;
+    animation: twinkle 3.2s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle {
+    from { opacity: 0.25; }
+    to   { opacity: 0.95; }
+  }
+
+  /* 四角星光（仙塵） */
+  .sparkle {
+    position: fixed;
+    width: 14px;
+    height: 14px;
+    background: #fff8c9;
+    clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+    filter: drop-shadow(0 0 6px #ffe680);
+    pointer-events: none;
+    z-index: 0;
+    animation: sparkle 2.4s ease-in-out infinite;
+  }
+  .sparkle:nth-child(2) { top: 12%; left: 12%; animation-delay: 0s; }
+  .sparkle:nth-child(3) { top: 22%; left: 78%; animation-delay: 0.8s; width: 10px; height: 10px; }
+  .sparkle:nth-child(4) { top: 55%; left: 6%;  animation-delay: 1.4s; width: 18px; height: 18px; }
+  .sparkle:nth-child(5) { top: 48%; left: 90%; animation-delay: 0.4s; }
+  .sparkle:nth-child(6) { top: 8%;  left: 55%; animation-delay: 1.9s; width: 9px; height: 9px; }
+  @keyframes sparkle {
+    0%, 100% { transform: scale(0.4) rotate(0deg);  opacity: 0.3; }
+    50%      { transform: scale(1.1) rotate(45deg); opacity: 1; }
+  }
+
+  /* 劃過夜空的流星 */
+  .shooting-star {
+    top: 14%;
+    left: -12%;
+    width: 160px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), #fff 70%, #ffe680);
+    box-shadow: 0 0 10px 2px rgba(255, 240, 180, 0.7);
+    transform: rotate(18deg);
+    animation: shoot 7s ease-in infinite;
+    animation-delay: 1.5s;
+    opacity: 0;
+  }
+  @keyframes shoot {
+    0%   { transform: translate(0, 0) rotate(18deg); opacity: 0; }
+    5%   { opacity: 1; }
+    30%  { transform: translate(130vw, 42vw) rotate(18deg); opacity: 0; }
+    100% { transform: translate(130vw, 42vw) rotate(18deg); opacity: 0; }
+  }
+
+  /* 城堡剪影 */
+  .castle {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 34vh;
+    min-height: 160px;
+    display: block;
+    filter: drop-shadow(0 -6px 24px rgba(255, 200, 255, 0.35));
+  }
+
   .app {
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 480px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(10, 10, 60, 0.45), 0 0 0 1px rgba(255,255,255,0.15);
     padding: 24px;
   }
   h1 {
     font-size: 20px;
     margin: 0 0 16px;
-    color: #222;
+    color: #2a1e6b;
   }
+  h1::before { content: '✨ '; }
   .input-row {
     display: flex;
     gap: 8px;
@@ -43,12 +144,13 @@
     padding: 10px 16px;
     border: none;
     border-radius: 8px;
-    background: #2563eb;
+    background: linear-gradient(135deg, #6a3fa5, #3b4fd8);
     color: #fff;
     font-size: 15px;
     cursor: pointer;
+    box-shadow: 0 4px 12px rgba(59, 79, 216, 0.35);
   }
-  .input-row button:hover { background: #1d4ed8; }
+  .input-row button:hover { background: linear-gradient(135deg, #5a339a, #2f43c9); }
   ul {
     list-style: none;
     margin: 0;
@@ -90,7 +192,7 @@
   .footer button {
     border: none;
     background: transparent;
-    color: #2563eb;
+    color: #6a3fa5;
     cursor: pointer;
     font-size: 13px;
   }
@@ -103,6 +205,71 @@
 </style>
 </head>
 <body>
+  <!-- 背景裝飾：星空、仙塵、流星、城堡剪影（純裝飾，不影響功能） -->
+  <div class="sky" aria-hidden="true"></div>
+  <span class="sparkle" aria-hidden="true"></span>
+  <span class="sparkle" aria-hidden="true"></span>
+  <span class="sparkle" aria-hidden="true"></span>
+  <span class="sparkle" aria-hidden="true"></span>
+  <span class="sparkle" aria-hidden="true"></span>
+  <div class="shooting-star" aria-hidden="true"></div>
+  <svg class="castle" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <g fill="#0a0f33">
+      <!-- 山丘地面 -->
+      <path d="M0 300 L0 268 Q300 238 600 262 Q900 238 1200 268 L1200 300 Z"/>
+      <!-- 外側低牆 -->
+      <rect x="250" y="232" width="100" height="70"/>
+      <rect x="850" y="232" width="100" height="70"/>
+      <rect x="256" y="222" width="10" height="12"/><rect x="276" y="222" width="10" height="12"/>
+      <rect x="296" y="222" width="10" height="12"/><rect x="316" y="222" width="10" height="12"/>
+      <rect x="336" y="222" width="10" height="12"/>
+      <rect x="856" y="222" width="10" height="12"/><rect x="876" y="222" width="10" height="12"/>
+      <rect x="896" y="222" width="10" height="12"/><rect x="916" y="222" width="10" height="12"/>
+      <rect x="936" y="222" width="10" height="12"/>
+      <!-- 主牆與城垛 -->
+      <rect x="380" y="200" width="440" height="102"/>
+      <rect x="386" y="188" width="12" height="14"/><rect x="410" y="188" width="12" height="14"/>
+      <rect x="434" y="188" width="12" height="14"/><rect x="458" y="188" width="12" height="14"/>
+      <rect x="730" y="188" width="12" height="14"/><rect x="754" y="188" width="12" height="14"/>
+      <rect x="778" y="188" width="12" height="14"/><rect x="802" y="188" width="12" height="14"/>
+      <!-- 外側塔 -->
+      <rect x="340" y="150" width="60" height="152"/>
+      <polygon points="330,152 370,88 410,152"/>
+      <rect x="800" y="150" width="60" height="152"/>
+      <polygon points="790,152 830,88 870,152"/>
+      <!-- 內側塔 -->
+      <rect x="450" y="120" width="50" height="182"/>
+      <polygon points="440,122 475,48 510,122"/>
+      <rect x="700" y="120" width="50" height="182"/>
+      <polygon points="690,122 725,48 760,122"/>
+      <!-- 小尖塔 -->
+      <rect x="520" y="160" width="30" height="142"/>
+      <polygon points="512,162 535,118 558,162"/>
+      <rect x="650" y="160" width="30" height="142"/>
+      <polygon points="642,162 665,118 688,162"/>
+      <!-- 中央高塔與旗幟 -->
+      <rect x="570" y="100" width="60" height="202"/>
+      <polygon points="555,102 600,20 645,102"/>
+      <rect x="599" y="0" width="2" height="22"/>
+      <polygon points="601,0 620,6 601,12"/>
+    </g>
+    <!-- 溫暖的窗光 -->
+    <g fill="#ffe08a" opacity="0.9">
+      <rect x="596" y="140" width="8" height="16" rx="4"/>
+      <rect x="596" y="190" width="8" height="16" rx="4"/>
+      <rect x="471" y="160" width="8" height="14" rx="4"/>
+      <rect x="721" y="160" width="8" height="14" rx="4"/>
+      <rect x="366" y="190" width="8" height="14" rx="4"/>
+      <rect x="826" y="190" width="8" height="14" rx="4"/>
+      <rect x="531" y="200" width="6" height="12" rx="3"/>
+      <rect x="661" y="200" width="6" height="12" rx="3"/>
+      <rect x="500" y="240" width="8" height="18" rx="4"/>
+      <rect x="692" y="240" width="8" height="18" rx="4"/>
+      <!-- 城門 -->
+      <path d="M584 302 L584 262 Q600 244 616 262 L616 302 Z"/>
+    </g>
+  </svg>
+
   <div class="app">
     <h1>待辦事項</h1>
     <div class="input-row">

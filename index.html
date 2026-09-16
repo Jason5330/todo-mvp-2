@@ -257,7 +257,9 @@
     const text = inputEl.value.trim();
     if (!text) return;
     const due = dueInputEl.value || null;
-    todos.push({ id: Date.now(), text, done: false, due });
+    // 以時間戳加隨機後綴當 id，避免連續快速新增時撞到同一個 id
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    todos.push({ id, text, done: false, due });
     inputEl.value = '';
     dueInputEl.value = '';
     saveTodos(todos);

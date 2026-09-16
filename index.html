@@ -22,22 +22,51 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     padding: 24px;
   }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
   h1 {
     font-size: 20px;
-    margin: 0 0 16px;
+    margin: 0;
     color: #222;
+  }
+  .clock {
+    text-align: right;
+    line-height: 1.3;
+  }
+  .clock-time {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2563eb;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-date {
+    font-size: 12px;
+    color: #888;
   }
   .input-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 16px;
   }
   .input-row input {
-    flex: 1;
+    flex: 1 1 160px;
+    min-width: 0;
     padding: 10px 12px;
     border: 1px solid #ddd;
     border-radius: 8px;
     font-size: 15px;
+  }
+  .input-row input[type="date"] {
+    flex: 0 0 auto;
+    width: 140px;
+    color: #555;
+    font-family: inherit;
   }
   .input-row button {
     padding: 10px 16px;
@@ -49,29 +78,6 @@
     cursor: pointer;
   }
   .input-row button:hover { background: #1d4ed8; }
-  .input-row input[type="date"] {
-    flex: 0 0 auto;
-    width: 150px;
-    color: #555;
-  }
-  @media (max-width: 420px) {
-    .input-row { flex-wrap: wrap; }
-    .input-row input[type="text"] { flex: 1 1 100%; }
-    .input-row input[type="date"] { flex: 1; }
-  }
-  .text-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-  .date-tag {
-    font-size: 12px;
-    color: #888;
-  }
-  .date-tag.overdue { color: #d33; }
-  li.done .date-tag { color: #bbb; text-decoration: none; }
   ul {
     list-style: none;
     margin: 0;
@@ -85,14 +91,27 @@
     border-bottom: 1px solid #eee;
   }
   li:last-child { border-bottom: none; }
-  li span.todo-text {
+  li span {
+    flex: 1;
     font-size: 15px;
     word-break: break-word;
   }
-  li.done span.todo-text {
+  li.done span {
     text-decoration: line-through;
     color: #999;
   }
+  li .due {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: #888;
+    background: #f0f0f3;
+    border-radius: 6px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  li .due.today { color: #b45309; background: #fef3c7; }
+  li .due.overdue { color: #b91c1c; background: #fee2e2; }
+  li.done .due { color: #aaa; background: #f5f5f5; }
   li button.delete-btn {
     border: none;
     background: transparent;
@@ -126,10 +145,16 @@
 </head>
 <body>
   <div class="app">
-    <h1>待辦事項</h1>
+    <div class="header">
+      <h1>待辦事項</h1>
+      <div class="clock" aria-live="off">
+        <div id="clock-time" class="clock-time">--:--:--</div>
+        <div id="clock-date" class="clock-date"></div>
+      </div>
+    </div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
-      <input id="date-input" type="date" title="到期日（選填）">
+      <input id="due-input" type="date" title="到期日（選填）" aria-label="到期日（選填）">
       <button id="add-btn">新增</button>
     </div>
     <ul id="todo-list"></ul>
@@ -162,27 +187,30 @@
 
   let todos = loadTodos();
 
-  function todayStr() {
-    const d = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  function formatDate(iso) {
-    const [y, m, d] = iso.split('-');
-    return `${y}/${m}/${d}`;
-  }
-
   const listEl = document.getElementById('todo-list');
   const inputEl = document.getElementById('todo-input');
-  const dateEl = document.getElementById('date-input');
+  const dueInputEl = document.getElementById('due-input');
   const addBtn = document.getElementById('add-btn');
   const emptyHint = document.getElementById('empty-hint');
   const countText = document.getElementById('count-text');
   const clearDoneBtn = document.getElementById('clear-done-btn');
 
+  // 以本地時區取得 YYYY-MM-DD，避免 toISOString() 在 UTC 換日造成日期偏移
+  function todayStr() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  function formatDue(due) {
+    const [y, m, d] = due.split('-');
+    return `${Number(m)}/${Number(d)}`;
+  }
+
   function render() {
     listEl.innerHTML = '';
+    const today = todayStr();
     emptyHint.style.display = todos.length === 0 ? 'block' : 'none';
 
     todos.forEach(todo => {
@@ -194,21 +222,19 @@
       checkbox.checked = todo.done;
       checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
-      const textWrap = document.createElement('div');
-      textWrap.className = 'text-wrap';
-
       const span = document.createElement('span');
-      span.className = 'todo-text';
       span.textContent = todo.text;
-      textWrap.appendChild(span);
 
-      if (todo.date) {
-        const dateTag = document.createElement('span');
-        dateTag.className = 'date-tag';
-        const isOverdue = !todo.done && todo.date < todayStr();
-        if (isOverdue) dateTag.classList.add('overdue');
-        dateTag.textContent = (isOverdue ? '已逾期 · ' : '到期 ') + formatDate(todo.date);
-        textWrap.appendChild(dateTag);
+      let dueEl = null;
+      if (todo.due) {
+        dueEl = document.createElement('small');
+        dueEl.className = 'due';
+        dueEl.textContent = formatDue(todo.due);
+        dueEl.title = `到期日 ${todo.due}`;
+        if (!todo.done) {
+          if (todo.due < today) dueEl.classList.add('overdue');
+          else if (todo.due === today) dueEl.classList.add('today');
+        }
       }
 
       const delBtn = document.createElement('button');
@@ -217,7 +243,8 @@
       delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.appendChild(checkbox);
-      li.appendChild(textWrap);
+      li.appendChild(span);
+      if (dueEl) li.appendChild(dueEl);
       li.appendChild(delBtn);
       listEl.appendChild(li);
     });
@@ -229,11 +256,12 @@
   function addTodo() {
     const text = inputEl.value.trim();
     if (!text) return;
-    const date = dateEl.value || null;
+    const due = dueInputEl.value || null;
+    // 以時間戳加隨機後綴當 id，避免連續快速新增時撞到同一個 id
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    todos.push({ id, text, date, done: false });
+    todos.push({ id, text, done: false, due });
     inputEl.value = '';
-    dateEl.value = '';
+    dueInputEl.value = '';
     saveTodos(todos);
     render();
   }
@@ -261,10 +289,30 @@
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
   });
-  dateEl.addEventListener('keydown', (e) => {
+  dueInputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);
+
+  // 時鐘：每秒更新目前時間與日期
+  const clockTimeEl = document.getElementById('clock-time');
+  const clockDateEl = document.getElementById('clock-date');
+  const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function pad(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function updateClock() {
+    const now = new Date();
+    clockTimeEl.textContent =
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    clockDateEl.textContent =
+      `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} 星期${WEEKDAYS[now.getDay()]}`;
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
 
   render();
 </script>

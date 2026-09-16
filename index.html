@@ -22,10 +22,31 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     padding: 24px;
   }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
   h1 {
     font-size: 20px;
-    margin: 0 0 16px;
+    margin: 0;
     color: #222;
+  }
+  .clock {
+    text-align: right;
+    line-height: 1.3;
+  }
+  .clock-time {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2563eb;
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-date {
+    font-size: 12px;
+    color: #888;
   }
   .input-row {
     display: flex;
@@ -104,7 +125,13 @@
 </head>
 <body>
   <div class="app">
-    <h1>待辦事項</h1>
+    <div class="header">
+      <h1>待辦事項</h1>
+      <div class="clock" aria-live="off">
+        <div id="clock-time" class="clock-time">--:--:--</div>
+        <div id="clock-date" class="clock-date"></div>
+      </div>
+    </div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>
@@ -210,6 +237,26 @@
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);
+
+  // 時鐘：每秒更新目前時間與日期
+  const clockTimeEl = document.getElementById('clock-time');
+  const clockDateEl = document.getElementById('clock-date');
+  const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function pad(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function updateClock() {
+    const now = new Date();
+    clockTimeEl.textContent =
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    clockDateEl.textContent =
+      `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} 星期${WEEKDAYS[now.getDay()]}`;
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
 
   render();
 </script>

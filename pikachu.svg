@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" width="240" height="260" role="img" aria-label="皮卡丘風格插圖">
+  <!-- 自繪的皮卡丘風格插圖，作為看板底圖使用 -->
+  <defs>
+    <style>
+      .body   { fill: #f9d71c; stroke: #c9a20a; stroke-width: 3; stroke-linejoin: round; }
+      .tip    { fill: #2b2b2b; }
+      .stripe { fill: #a5661f; }
+      .cheek  { fill: #e3342f; }
+      .eye    { fill: #2b2b2b; }
+      .shine  { fill: #ffffff; }
+      .line   { fill: none; stroke: #2b2b2b; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- 尾巴（閃電形） -->
+  <path class="stripe" d="M78 190 L66 170 L84 166 Z"/>
+  <path class="body" d="M76 172 L44 132 L64 128 L28 72 L86 60 L70 96 L100 92 L84 128 L100 126 Z"/>
+
+  <!-- 耳朵 -->
+  <path class="body" d="M88 98 C72 70 58 40 54 16 C74 30 96 60 106 90 Z"/>
+  <path class="tip"  d="M54 16 C62 24 70 34 76 46 C66 40 58 30 54 16 Z"/>
+  <path class="body" d="M152 98 C168 70 182 40 186 16 C166 30 144 60 134 90 Z"/>
+  <path class="tip"  d="M186 16 C178 24 170 34 164 46 C174 40 182 30 186 16 Z"/>
+
+  <!-- 身體 -->
+  <ellipse class="body" cx="120" cy="186" rx="52" ry="50"/>
+  <!-- 背部條紋 -->
+  <path class="stripe" d="M74 180 C82 178 92 178 100 182 C92 190 82 192 72 188 Z"/>
+  <path class="stripe" d="M76 204 C86 202 96 202 104 206 C96 214 86 216 76 212 Z"/>
+
+  <!-- 頭 -->
+  <circle class="body" cx="120" cy="112" r="50"/>
+
+  <!-- 手 -->
+  <ellipse class="body" cx="88" cy="172" rx="12" ry="20" transform="rotate(25 88 172)"/>
+  <ellipse class="body" cx="152" cy="172" rx="12" ry="20" transform="rotate(-25 152 172)"/>
+
+  <!-- 腳 -->
+  <ellipse class="body" cx="96" cy="232" rx="20" ry="11"/>
+  <ellipse class="body" cx="144" cy="232" rx="20" ry="11"/>
+
+  <!-- 臉頰 -->
+  <circle class="cheek" cx="84" cy="128" r="10"/>
+  <circle class="cheek" cx="156" cy="128" r="10"/>
+
+  <!-- 眼睛 -->
+  <circle class="eye" cx="102" cy="106" r="7"/>
+  <circle class="eye" cx="138" cy="106" r="7"/>
+  <circle class="shine" cx="104" cy="103" r="2.5"/>
+  <circle class="shine" cx="140" cy="103" r="2.5"/>
+
+  <!-- 鼻子與嘴 -->
+  <ellipse class="eye" cx="120" cy="120" rx="2.5" ry="1.8"/>
+  <path class="line" d="M108 128 Q114 136 120 128 Q126 136 132 128"/>
+</svg>

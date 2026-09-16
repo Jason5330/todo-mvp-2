@@ -22,11 +22,72 @@
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     padding: 24px;
   }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
   h1 {
     font-size: 20px;
-    margin: 0 0 16px;
+    margin: 0;
     color: #222;
   }
+  .clock {
+    text-align: right;
+    line-height: 1.3;
+  }
+  .clock-time {
+    font-size: 22px;
+    font-weight: 600;
+    color: #2563eb;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+  }
+  .clock-date {
+    font-size: 12px;
+    color: #888;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px 10px;
+    background: #f5f5f7;
+    border-radius: 8px;
+  }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: #22c55e;
+  }
+  .status-row[data-status="online"] .status-dot { background: #22c55e; }
+  .status-row[data-status="busy"]   .status-dot { background: #f59e0b; }
+  .status-row[data-status="dnd"]    .status-dot { background: #ef4444; }
+  .status-row[data-status="away"]   .status-dot { background: #9ca3af; }
+  .status-row select {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    background: #fff;
+    color: #333;
+    cursor: pointer;
+  }
+  .status-row input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    color: #555;
+    padding: 6px 4px;
+    min-width: 0;
+  }
+  .status-row input:focus { outline: none; }
   .input-row {
     display: flex;
     gap: 8px;
@@ -104,7 +165,23 @@
 </head>
 <body>
   <div class="app">
-    <h1>待辦事項</h1>
+    <div class="header">
+      <h1>待辦事項</h1>
+      <div class="clock" aria-live="off">
+        <div id="clock-time" class="clock-time">--:--:--</div>
+        <div id="clock-date" class="clock-date"></div>
+      </div>
+    </div>
+    <div id="status-row" class="status-row" data-status="online">
+      <span class="status-dot"></span>
+      <select id="status-select" aria-label="我的狀態">
+        <option value="online">在線</option>
+        <option value="busy">忙碌</option>
+        <option value="dnd">請勿打擾</option>
+        <option value="away">離開</option>
+      </select>
+      <input id="status-message" type="text" maxlength="60" placeholder="我的狀態訊息（選填）">
+    </div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>
@@ -210,6 +287,60 @@
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);
+
+  // 我的狀態：預設狀態 + 自訂訊息，存於 localStorage
+  const STATUS_KEY = 'todo-status';
+  const statusRow = document.getElementById('status-row');
+  const statusSelect = document.getElementById('status-select');
+  const statusMessage = document.getElementById('status-message');
+
+  function loadStatus() {
+    try {
+      const raw = localStorage.getItem(STATUS_KEY);
+      const st = raw ? JSON.parse(raw) : {};
+      return { state: st.state || 'online', message: st.message || '' };
+    } catch (e) {
+      return { state: 'online', message: '' };
+    }
+  }
+
+  function saveStatus() {
+    const st = { state: statusSelect.value, message: statusMessage.value.trim() };
+    statusRow.dataset.status = st.state;
+    try {
+      localStorage.setItem(STATUS_KEY, JSON.stringify(st));
+    } catch (e) {
+      // 無法使用 localStorage 時僅保留在記憶體中
+    }
+  }
+
+  (function initStatus() {
+    const st = loadStatus();
+    statusSelect.value = st.state;
+    statusMessage.value = st.message;
+    statusRow.dataset.status = st.state;
+  })();
+
+  statusSelect.addEventListener('change', saveStatus);
+  statusMessage.addEventListener('input', saveStatus);
+
+  // 時鐘：每秒更新一次目前日期與時間
+  const clockTimeEl = document.getElementById('clock-time');
+  const clockDateEl = document.getElementById('clock-date');
+  const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  function updateClock() {
+    const now = new Date();
+    clockTimeEl.textContent =
+      `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+    clockDateEl.textContent =
+      `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日 星期${WEEKDAYS[now.getDay()]}`;
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
 
   render();
 </script>

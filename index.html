@@ -100,11 +100,52 @@
     font-size: 14px;
     padding: 24px 0;
   }
+  .chase-strip {
+    position: relative;
+    height: 40px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    background: linear-gradient(#eef3ff, #e3ebfb);
+    border-bottom: 2px dashed #c7d2e6;
+    overflow: hidden;
+  }
+  .chase-strip span {
+    position: absolute;
+    bottom: 4px;
+    font-size: 22px;
+    line-height: 1;
+    animation: chase 5s linear infinite, bob 0.3s ease-in-out infinite;
+  }
+  .chase-strip .mouse { animation-delay: -0.8s, 0s; }
+  .chase-strip .cat   { animation-delay: 0s, -0.15s; }
+  @keyframes chase {
+    from { left: -40px; }
+    to   { left: 100%; }
+  }
+  @keyframes bob {
+    0%, 100% { transform: scaleX(-1) translateY(0); }
+    50%      { transform: scaleX(-1) translateY(-5px); }
+  }
+  .signature {
+    position: absolute;
+    right: 6px;
+    bottom: 3px;
+    font-size: 9px;
+    color: #9aa8c4;
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.5px;
+    user-select: none;
+  }
 </style>
 </head>
 <body>
   <div class="app">
     <h1>待辦事項</h1>
+    <div class="chase-strip" aria-hidden="true">
+      <span class="mouse">🐁</span>
+      <span class="cat">🐈</span>
+      <div class="signature">J.C</div>
+    </div>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
       <button id="add-btn">新增</button>

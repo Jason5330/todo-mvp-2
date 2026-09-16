@@ -94,6 +94,44 @@
     cursor: pointer;
     font-size: 13px;
   }
+  .clock-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .clock {
+    width: 140px;
+    height: 140px;
+  }
+  .clock .face {
+    fill: #fff;
+    stroke: #2563eb;
+    stroke-width: 4;
+  }
+  .clock .tick {
+    stroke: #bbb;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .clock .tick.major {
+    stroke: #555;
+    stroke-width: 3;
+  }
+  .clock .hand {
+    stroke-linecap: round;
+    transform-origin: 100px 100px;
+  }
+  .clock .hour   { stroke: #222; stroke-width: 6; }
+  .clock .minute { stroke: #444; stroke-width: 4; }
+  .clock .second { stroke: #d33; stroke-width: 2; }
+  .clock .center { fill: #d33; }
+  .clock-digital {
+    margin-top: 8px;
+    font-size: 14px;
+    color: #666;
+    font-variant-numeric: tabular-nums;
+  }
   .empty {
     text-align: center;
     color: #aaa;
@@ -104,6 +142,17 @@
 </head>
 <body>
   <div class="app">
+    <div class="clock-wrap">
+      <svg class="clock" viewBox="0 0 200 200" role="img" aria-label="時鐘">
+        <circle class="face" cx="100" cy="100" r="94"/>
+        <g id="clock-ticks"></g>
+        <line id="hand-hour"   class="hand hour"   x1="100" y1="100" x2="100" y2="52"/>
+        <line id="hand-minute" class="hand minute" x1="100" y1="100" x2="100" y2="32"/>
+        <line id="hand-second" class="hand second" x1="100" y1="112" x2="100" y2="24"/>
+        <circle class="center" cx="100" cy="100" r="5"/>
+      </svg>
+      <div id="clock-digital" class="clock-digital">--:--:--</div>
+    </div>
     <h1>待辦事項</h1>
     <div class="input-row">
       <input id="todo-input" type="text" placeholder="輸入待辦事項，按 Enter 新增">
@@ -210,6 +259,43 @@
     if (e.key === 'Enter') addTodo();
   });
   clearDoneBtn.addEventListener('click', clearDone);
+
+  // ---- 圓形時鐘 ----
+  (function initClock() {
+    const ticksEl = document.getElementById('clock-ticks');
+    for (let i = 0; i < 60; i++) {
+      const major = i % 5 === 0;
+      const angle = (i * 6) * Math.PI / 180;
+      const r1 = major ? 78 : 84;
+      const r2 = 90;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', 100 + r1 * Math.sin(angle));
+      line.setAttribute('y1', 100 - r1 * Math.cos(angle));
+      line.setAttribute('x2', 100 + r2 * Math.sin(angle));
+      line.setAttribute('y2', 100 - r2 * Math.cos(angle));
+      line.setAttribute('class', major ? 'tick major' : 'tick');
+      ticksEl.appendChild(line);
+    }
+
+    const hourHand = document.getElementById('hand-hour');
+    const minuteHand = document.getElementById('hand-minute');
+    const secondHand = document.getElementById('hand-second');
+    const digitalEl = document.getElementById('clock-digital');
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function tick() {
+      const now = new Date();
+      const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+      hourHand.style.transform = `rotate(${(h % 12) * 30 + m * 0.5}deg)`;
+      minuteHand.style.transform = `rotate(${m * 6 + s * 0.1}deg)`;
+      secondHand.style.transform = `rotate(${s * 6}deg)`;
+      digitalEl.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  })();
 
   render();
 </script>
